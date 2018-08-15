@@ -1,0 +1,41 @@
+<%#
+name: safedc_pxelinux_global
+snippet: false
+model: ProvisioningTemplate
+kind: PXELinux
+%>
+<%# Used to boot unknown hosts, do not associate or change the name. %>
+
+DEFAULT menu
+PROMPT 0
+MENU TITLE SAFEDC PXE Menu
+TIMEOUT 10
+TOTALTIMEOUT 6000
+ONTIMEOUT discovery
+
+LABEL discovery
+  MENU LABEL Foreman Discovery Image
+  KERNEL boot/fdi-image/vmlinuz0
+  APPEND initrd=boot/fdi-image/initrd0.img rootflags=loop root=live:/fdi.iso rootfstype=auto ro rd.live.image acpi=force rd.luks=0 rd.md=0 rd.dm=0 rd.lvm=0 rd.bootif=0 rd.neednet=0 nomodeset proxy.url=https://10.19.20.198 proxy.type=foreman
+  IPAPPEND 2
+
+
+<%= snippet "pxelinux_chainload" %>
+
+<% unless @profiles.nil? -%>
+<% for profile in @profiles
+  url = default_template_url(profile[:template], profile[:hostgroup])
+  case profile[:pxe_type]
+  when 'kickstart'
+    append = "ks=#{url} ksdevice=bootif network kssendmac ks.sendmac inst.ks.sendmac"
+  when 'preseed'
+    locale = profile[:hostgroup].params['lang'] || 'en_US'
+    append = "interface=auto url=#{url} ramdisk_size=10800 root=/dev/rd/0 rw auto hostname=unassigned-hostname locale=#{locale} console-setup/ask_detect=false console-setup/layout=USA console-setup/variant=USA"
+  else
+    raise("PXE type #{profile[:pxe_type]} not supported by template #{template_name}")
+  end %>
+LABEL <%= "#{profile[:hostgroup]} - #{profile[:template]}" %>
+  KERNEL <%= profile[:kernel] %>
+  APPEND initrd=<%= profile[:initrd] %> <%= append %>
+<% end %>
+<% end -%>
